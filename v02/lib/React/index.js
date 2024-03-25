@@ -150,8 +150,13 @@ const performWorkOfUnit = (fiber) => {
     reconcileChildren(fiber)
     // 4 返回下一个要处理的fiber节点
     if (!!fiber.child) return fiber.child
-    if(!!fiber.sibling) return fiber.sibling
-    return fiber.parent?.sibling
+    // 这里要处理一下复杂的嵌套dom
+    let nextFiber = fiber
+    // 遍历到最后一个元素后，要一直向上寻找，直到找到有兄弟节点的fiber为止
+    while (!!nextFiber) {
+        if(!!nextFiber.sibling) return nextFiber.sibling
+        nextFiber = nextFiber.parent
+    }
 }
 
 // 声明fiber节点
