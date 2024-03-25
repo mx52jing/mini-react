@@ -1,0 +1,2 @@
+export const REACT_ELEMENT = "REACT_ELEMENT"
+export const REACT_TEXT = "REACT_TEXT"
