@@ -105,6 +105,10 @@ function reconcileChildren(fiber, children) {
                 child: null,
                 effectTag: PLACEMENT_TAG, // 插入tag
             }
+            // 如果不是同一个类型并且有oldFiber，说明此时是更新状态，需要把老的节点移除掉
+            if (oldFiber) {
+                deletionNodes.push(oldFiber)
+            }
         }
         // 从第二个元素开始，alternate 要指向兄弟fiber的sibling
         if(oldFiber) {
@@ -121,6 +125,12 @@ function reconcileChildren(fiber, children) {
         // 更新上一个兄弟fiber的值
         prevChildFiber = curChildFiber
     })
+    // 更新的时候，如果children遍历结束后还有oldFiber，那这个oldFiber就是要删除的节点
+    // 防止有多个兄弟节点需要删除，所以要使用while循环
+    while (oldFiber) {
+        deletionNodes.push(oldFiber)
+        oldFiber = oldFiber.sibling
+    }
 }
 /**
  * 根据虚拟dom生成真实dom
@@ -231,12 +241,34 @@ const performWorkOfUnit = (fiber) => {
 }
 
 /**
+ * 删除多余的节点
+ * 这里可能包括函数组件，要考虑全面
+ * @param fiber
+ */
+const commitDeletion = fiber => {
+    // 删除的时候 函数组件要使用函数组件的parent的dom 移除函数组件child的dom
+    if(fiber.dom) {
+        let parentFiber = fiber.parent
+        while (!parentFiber.dom) {
+            parentFiber = parentFiber.parent
+        }
+        parentFiber.dom.removeChild(fiber.dom)
+        return
+    }
+    commitDeletion(fiber.child)
+}
+
+/**
  * 统一提交
  */
 const commitRoot = () => {
+    // 在统一提交之前处理要删除的节点
+    deletionNodes.forEach(commitDeletion)
     commitWork(workInProgressFiber.child)
     currentRootFiber = workInProgressFiber
     workInProgressFiber  = null
+    // 条之后要还原deletionNodes
+    deletionNodes = []
 }
 
 /**
@@ -269,6 +301,8 @@ let nextWorkFiber = null
 let workInProgressFiber  = null
 // 当前rootFiber 为了在更新的时候创建alternate关联使用
 let currentRootFiber = null
+// 当前要删除的节点数组
+let deletionNodes = []
 /**
  * 实现任务调度器
  * @param deadline

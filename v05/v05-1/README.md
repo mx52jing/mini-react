@@ -15,7 +15,9 @@
 - 实现`function component`支持
 
 - 实现更新逻辑
-  - 实现更新props
+    - 实现更新props
+  
+    - 实现dom节点的新增和删除
 
 ## ReactDom
 
