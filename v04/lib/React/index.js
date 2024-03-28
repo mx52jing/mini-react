@@ -15,8 +15,10 @@ export const toVDom = (element) => {
     if(!!~["string", "number"].indexOf(elementType)) {
         return {
             type: REACT_TEXT,
-            props: element,
-            children: []
+            props: {
+                nodeValue: element,
+                children: []
+            },
         }
     }
     return element
@@ -29,10 +31,20 @@ export const toVDom = (element) => {
  * @param prevProps
  */
 function updateProps(dom, nextProps, prevProps) {
+    // 处理删除掉的属性
+    for(const key in prevProps) {
+        if (key === 'children') continue
+        if(!nextProps.hasOwnProperty(key)) {
+            dom.removeAttribute(key)
+        }
+    }
     // 处理新增和修改的属性
     for(const key in nextProps) {
         // children属性单独处理，不在这里处理
-        if(key === 'children') {
+        if(
+            key === 'children' ||
+            nextProps[key] === prevProps[key] // 老的props和新的相等 不做处理
+        ) {
             continue;
         }
         // 处理绑定事件
@@ -50,15 +62,9 @@ function updateProps(dom, nextProps, prevProps) {
                     dom.style[attr] = styles[attr]
                 }
             }
-        }else {
-            dom[key] = nextProps[key]
+            continue
         }
-    }
-    // 处理删除掉的属性
-    for(const key in prevProps) {
-        if(!nextProps.hasOwnProperty(key)) {
-            delete nextProps[key]
-        }
+        dom[key] = nextProps[key]
     }
 }
 
@@ -123,7 +129,7 @@ export const createRealDOM = (fiber) => {
     const { type, props } = fiber
     let realDom;
     if(type === REACT_TEXT) {
-        realDom = document.createTextNode(props)
+        realDom = document.createTextNode(props.nodeValue)
     }else {
         realDom = document.createElement(type);
     }
@@ -159,8 +165,8 @@ export const createElement = (type, props, ...children) => {
  * @param vDom
  */
 export const render = (el, vDom) => {
-    // 设置fiber 属性值
-    fiber = {
+    // 设置workInProgressFiber属性值
+    workInProgressFiber = {
         type: vDom.type, //
         props: vDom.props ?? {},
         dom: el, // 当前fiber节点对应的真实dom
@@ -168,8 +174,7 @@ export const render = (el, vDom) => {
         sibling: null, // 当前fiber节点的兄弟fiber节点
         child: null // 当前fiber节点的儿子fiber节点
     }
-    // 为rootFiber赋值
-    rootFiber = fiber
+    nextWorkFiber = workInProgressFiber
 }
 
 /**
@@ -229,9 +234,9 @@ const performWorkOfUnit = (fiber) => {
  * 统一提交
  */
 const commitRoot = () => {
-    commitWork(rootFiber.child)
-    workInProgressFiber = rootFiber
-    rootFiber = null
+    commitWork(workInProgressFiber.child)
+    currentRootFiber = workInProgressFiber
+    workInProgressFiber  = null
 }
 
 /**
@@ -258,12 +263,12 @@ const commitWork = (fiber) => {
     commitWork(fiber.sibling)
 }
 
-// 声明fiber节点
-let fiber = null
-// 声明rootFiber节点 为了统一提交用··
-let rootFiber = null
-// 声明在工作流程中的fiber
-let workInProgressFiber = null
+// 声明下一个将要处理的fiber节点
+let nextWorkFiber = null
+// 声明workInProgressFiber节点
+let workInProgressFiber  = null
+// 当前rootFiber 为了在更新的时候创建alternate关联使用
+let currentRootFiber = null
 /**
  * 实现任务调度器
  * @param deadline
@@ -271,17 +276,16 @@ let workInProgressFiber = null
 const workLoop = (deadline) => {
     // 当前任务是否需要等待
     let shouldYield = false
-    if(!shouldYield && !!fiber) {
+    if(!shouldYield && !!nextWorkFiber) {
         // 如果有空闲时间 就开始工作 渲染我们的页面
-        fiber = performWorkOfUnit(fiber)
+        nextWorkFiber = performWorkOfUnit(nextWorkFiber)
         // 是否应该等待
         shouldYield = deadline.timeRemaining() < 1
     }
     // 当fiber为不存在的时候，说明所有的节点都遍历到了，
     // 并且每个dom都创建了对应的fiber节点，而且fiber节点之间的关联也已经创建成功
-    // 如果rootFiber为null 证明已经全部提交完毕了
-    if(!fiber && rootFiber) {
-        console.log("commitRoot")
+    // 如果nextWorkFiber为null 证明已经全部提交完毕了
+    if(!nextWorkFiber && workInProgressFiber) {
         // 可以统一提交 创建dom
         commitRoot()
     }
@@ -292,18 +296,17 @@ const workLoop = (deadline) => {
  * 更新函数
  */
 const update = () => {
-    // 设置fiber 属性值
-    fiber = {
-        type: workInProgressFiber.type, //
-        props: workInProgressFiber.props ?? {},
-        dom: workInProgressFiber.dom, // 当前fiber节点对应的真实dom
+    // 设置workInProgressFiber属性值
+    workInProgressFiber = {
+        type: currentRootFiber.type, //
+        props: currentRootFiber.props ?? {},
+        dom: currentRootFiber.dom, // 当前fiber节点对应的真实dom
         parent: null, // 当前fiber节点的父fiber节点
         sibling: null, // 当前fiber节点的兄弟fiber节点
         child: null, // 当前fiber节点的儿子fiber节点
-        alternate: workInProgressFiber
+        alternate: currentRootFiber
     }
-    // 为rootFiber赋值
-    rootFiber = fiber
+    nextWorkFiber = workInProgressFiber
 }
 
 requestIdleCallback(workLoop)
