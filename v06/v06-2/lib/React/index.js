@@ -382,13 +382,21 @@ function useState(initialValue) {
     let willUpdateFiber = curFunctionFiber
     const oldStateHook = willUpdateFiber?.alternate?.stateHooks?.[stateHookIndex]
     const stateHook = {
-        state: oldStateHook ? oldStateHook.state : initialValue
+        state: oldStateHook ? oldStateHook.state : initialValue,
+        queue: oldStateHook ? oldStateHook.queue : []
     }
+    stateHook.queue.forEach(action => {
+        stateHook.state = action(stateHook.state)
+    })
+    // 循环结束后一定要将queue清空
+    stateHook.queue = []
     stateHooks.push(stateHook)
     stateHookIndex++
     willUpdateFiber.stateHooks = stateHooks
     function setState(action) {
-        stateHook.state = typeof action === 'function' ? action(stateHook.state) : action
+        const eagerState = typeof action === 'function' ? action(stateHook.state) : action
+        if(eagerState === stateHook.state) return
+        stateHook.queue.push(() => eagerState)
         workInProgressFiber = {
             ...willUpdateFiber,
             alternate: willUpdateFiber

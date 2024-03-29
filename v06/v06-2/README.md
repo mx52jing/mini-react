@@ -25,7 +25,8 @@
 
 - 实现useState
   
-  - 优化useState
+  - 批量处理action
+  - 提前检测，避免不必要的更新
   
 ## ReactDom
 

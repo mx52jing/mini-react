@@ -6,8 +6,9 @@ const App = () => {
     const [count, setCount] = React.useState(10)
     const [open, setOpen] = React.useState(false)
     const handleCountIncrement = () => {
-        setCount(100)
-        // setOpen(open => !open)
+        // setCount(100)
+        setCount(s => s + 1)
+        setOpen(open => !open)
     }
     return (
         <div className="app-container">
