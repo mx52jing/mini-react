@@ -344,7 +344,7 @@ const workLoop = (deadline) => {
  * 更新函数
  */
 const update = () => {
-    // 记录报错每个函数节点的fiber
+    // 记录每个函数节点的fiber
     let willUpdateFiber = curFunctionFiber
     return () => {
         // 设置workInProgressFiber属性值

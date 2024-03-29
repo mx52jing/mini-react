@@ -199,6 +199,9 @@ export const render = (el, vDom) => {
  * @param fiber
  */
 const updateFunctionComponent = (fiber) => {
+    // 初始化 stateHooks 和 stateHookIndex
+    stateHooks = []
+    stateHookIndex = 0
     curFunctionFiber = fiber
     const { type, props } = fiber
     const children = [type(props)]
@@ -339,12 +342,13 @@ const workLoop = (deadline) => {
     }
     requestIdleCallback(workLoop)
 }
+requestIdleCallback(workLoop)
 
 /**
  * 更新函数
  */
 const update = () => {
-    // 记录报错每个函数节点的fiber
+    // 记录每个函数节点的fiber
     let willUpdateFiber = curFunctionFiber
     return () => {
         // 设置workInProgressFiber属性值
@@ -365,12 +369,40 @@ const update = () => {
     }
 }
 
-requestIdleCallback(workLoop)
+/**
+ * 实现useState
+ * @param initialValue
+ */
+// hook存放的数组
+let stateHooks
+// 当前的hook 索引index
+let stateHookIndex
+function useState(initialValue) {
+    // 记录每个函数节点的fiber
+    let willUpdateFiber = curFunctionFiber
+    const oldStateHook = willUpdateFiber?.alternate?.stateHooks?.[stateHookIndex]
+    const stateHook = {
+        state: oldStateHook ? oldStateHook.state : initialValue
+    }
+    stateHooks.push(stateHook)
+    stateHookIndex++
+    willUpdateFiber.stateHooks = stateHooks
+    function setState(action) {
+        stateHook.state = typeof action === 'function' ? action(stateHook.state) : action
+        workInProgressFiber = {
+            ...willUpdateFiber,
+            alternate: willUpdateFiber
+        }
+        nextWorkFiber =  workInProgressFiber
+    }
+    return [stateHook.state, setState]
+}
 
 const React = {
     createElement,
     render,
-    update
+    update,
+    useState
 }
 
 export default React
