@@ -1,1 +1,0 @@
-export const isFunctionComponent = target => typeof target === 'function'
