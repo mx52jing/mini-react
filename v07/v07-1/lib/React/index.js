@@ -202,6 +202,8 @@ const updateFunctionComponent = (fiber) => {
     // 初始化 stateHooks 和 stateHookIndex
     stateHooks = []
     stateHookIndex = 0
+    // 初始化effectHooks
+    effectHooks = []
     curFunctionFiber = fiber
     const { type, props } = fiber
     const children = [type(props)]
@@ -276,10 +278,62 @@ const commitRoot = () => {
     // 在统一提交之前处理要删除的节点
     deletionNodes.forEach(commitDeletion)
     commitWork(workInProgressFiber.child)
+    commitEffectHooks()
     currentRootFiber = workInProgressFiber
     workInProgressFiber  = null
     // 条之后要还原deletionNodes
     deletionNodes = []
+}
+
+const commitEffectHooks = () => {
+    function execHook(fiber) {
+        if(!fiber) return
+        const effectHooks = fiber?.effectHooks
+        const oldEffectHooks = fiber?.alternate?.effectHooks
+        // 如果alternate上的effectHooks有值就是更新
+        if (oldEffectHooks?.length) {
+            // update
+            oldEffectHooks.forEach((oldEffectHook, effectIndex)=> {
+                const newEffectHook = effectHooks[effectIndex]
+                const { deps: oldDeps } = oldEffectHook
+                // deps 为[]时，只会在init执行一次
+                if (oldDeps === []) return
+                // deps 为undefined时，在init和update的时候都会执行
+                if(oldDeps === undefined) {
+                    newEffectHook.cleanUp = newEffectHook.callback()
+                    return
+                }
+                // deps中只要有一个变量改了 就重新执行新的effect的callback
+                const needUpdate = oldDeps.some((dep, depIndex) => dep !== newEffectHook?.deps?.[depIndex])
+                if(needUpdate) {
+                    newEffectHook.cleanUp = newEffectHook?.callback()
+                }
+            })
+        }else if(effectHooks?.length) {
+            // init
+            effectHooks.forEach(effectHook => {
+                const { callback } = effectHook
+                effectHook.cleanUp = callback()
+            })
+        }
+        execHook(fiber.child)
+        execHook(fiber.sibling)
+    }
+    function execHookCleanUp(fiber) {
+        if(!fiber) return
+        const effectHooks = fiber?.alternate?.effectHooks
+        if(effectHooks?.length) {
+            effectHooks.forEach((effectHook) => {
+                const { cleanUp, deps } = effectHook
+                if(deps === []) return
+                cleanUp && cleanUp()
+            })
+        }
+        execHookCleanUp(fiber.child)
+        execHookCleanUp(fiber.sibling)
+    }
+    execHookCleanUp(workInProgressFiber)
+    execHook(workInProgressFiber)
 }
 
 /**
@@ -406,11 +460,26 @@ function useState(initialValue) {
     return [stateHook.state, setState]
 }
 
+/**
+ * 实现useEffect函数
+ */
+let effectHooks;
+function useEffect(callback, deps) {
+    const effectHook = {
+        callback,
+        deps,
+        cleanUp: undefined
+    }
+    effectHooks.push(effectHook)
+    curFunctionFiber.effectHooks = effectHooks
+}
+
 const React = {
     createElement,
     render,
     update,
-    useState
+    useState,
+    useEffect
 }
 
 export default React
